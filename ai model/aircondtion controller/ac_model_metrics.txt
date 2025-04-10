@@ -1,0 +1,3 @@
+Mean Squared Error: 5.1697
+Root Mean Squared Error: 2.2737
+Mean Absolute Error: 1.8884
