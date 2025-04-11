@@ -153,6 +153,19 @@ The automation system is based on Node-RED, a powerful flow-based programming to
 
 The visual programming interface makes it easy to create complex automation workflows that connect the various components of the system.
 
+##### Data Center Dashboard 
+
+- A modren looking with rich features dashboard
+
+==> instllation with 
+
+npm install --legacy-peer-deps
+
+===> run with 
+npm run dev
+
+
+
 ## Integration
 
 The three main components work together to provide a complete solution:
