@@ -7,7 +7,7 @@ from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-API_BASE_URL = "http://localhost:5000"
+API_BASE_URL = "http://localhost:5002"
 
 def check_api_health():
     """Check if the API is running and resources are loaded."""
