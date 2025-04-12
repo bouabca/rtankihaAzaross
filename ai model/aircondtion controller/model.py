@@ -6,6 +6,17 @@ from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 import seaborn as sns
+import pickle
+from flask import Flask, request, jsonify
+import threading
+
+# Global variables for Flask app
+model = None
+X_scaler = None
+y_scaler = None
+features = None
+sequence_length = None
+app = Flask(__name__)
 
 def prepare_lstm_data(df, features, target, sequence_length=7):
     """Prepare data for LSTM model with sliding window approach."""
@@ -91,6 +102,69 @@ def plot_training_history(history):
     plt.savefig('ac_training_history.png')
     print("Training history plot saved to ac_training_history.png")
 
+@app.route('/predict', methods=['POST'])
+def predict():
+    global model, X_scaler, y_scaler, features, sequence_length
+    
+    try:
+        # Get input data from request
+        input_data = request.json
+        
+        # Check if input is a single object or a list
+        if isinstance(input_data, list):
+            # Original case: multiple data points
+            if len(input_data) < sequence_length:
+                return jsonify({
+                    'error': f'Not enough data points. Need at least {sequence_length} sequential data points.'
+                }), 400
+            df_input = pd.DataFrame(input_data)
+        else:
+            # New case: single data point as an object
+            # Create a dataframe with the single data point
+            df_input = pd.DataFrame([input_data])
+            
+            # Replicate the single data point to create a sequence
+            df_input = pd.concat([df_input] * sequence_length, ignore_index=True)
+        
+        # Check if all required features are present
+        missing_features = [f for f in features if f not in df_input.columns]
+        if missing_features:
+            return jsonify({
+                'error': f'Missing required features: {missing_features}'
+            }), 400
+        
+        # Scale input features
+        df_features = X_scaler.transform(df_input[features].values[-sequence_length:])
+        
+        # Reshape for LSTM input (samples, time steps, features)
+        X_pred = np.array([df_features])
+        
+        # Make prediction
+        y_pred_scaled = model.predict(X_pred)
+        
+        # Inverse transform the prediction
+        y_pred = y_scaler.inverse_transform(y_pred_scaled)[0][0]
+        
+        return jsonify({
+            'predicted_ac_setting': float(y_pred)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e)
+        }), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    global model
+    return jsonify({
+        'status': 'healthy',
+        'model_loaded': model is not None
+    })
+
+def start_flask_server():
+    app.run(host='0.0.0.0', port=5000, debug=False)
+
 if __name__ == "__main__":
     # Load the datasets
     print("Loading training and testing data...")
@@ -114,7 +188,7 @@ if __name__ == "__main__":
     )
     
     X_test, y_test, _, _ = prepare_lstm_data(
-        test_data, features, target, sequence_length, 
+        test_data, features, target, sequence_length
     )
     
     print(f"Training data shape: {X_train.shape}")
@@ -147,6 +221,15 @@ if __name__ == "__main__":
     model.save('ac_lstm_model.h5')
     print("Model saved to ac_lstm_model.h5")
     
+    # Save the scalers for future use with the API
+    with open('X_scaler.pkl', 'wb') as f:
+        pickle.dump(X_scaler, f)
+    
+    with open('y_scaler.pkl', 'wb') as f:
+        pickle.dump(y_scaler, f)
+    
+    print("Scalers saved to X_scaler.pkl and y_scaler.pkl")
+    
     # Plot training history
     plot_training_history(history)
     
@@ -161,3 +244,7 @@ if __name__ == "__main__":
         f.write(f"Mean Absolute Error: {mae:.4f}\n")
     
     print("Training and evaluation complete!")
+    
+    # Start Flask application
+    print("Starting Flask application for predictions...")
+    start_flask_server()
